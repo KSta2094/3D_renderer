@@ -116,14 +116,27 @@ void rotatexz(std::vector<std::optional<Vector3>> *vertexes, float angle) {
         (*vertexes)[i]->z = tmp.z;
     }
 }
+std::vector<std::optional<Vector2>>
+plot3D(std::vector<std::optional<Vector3>> vertexes3D,
+       std::vector<char> *buffer) {
+
+    std::vector<std::optional<Vector2>> screenPoints;
+
+    for (std::optional<Vector3> vertex : vertexes3D) {
+        screenPoints.push_back(drawPoint(vertex.value(), buffer));
+    }
+    return screenPoints;
+}
+
 int main() {
     auto last_time = std::chrono::steady_clock::now();
     bool running = true;
-    float offset = 0;
     std::vector<char> buffer(WIDTH * HEIGHT, ' ');
     std::vector<std::optional<Vector2>> vertexes2D;
+
     std::vector<std::optional<Vector3>> vertexes3D = {
 
+        // front face
         Vector3{-1, 1, 2},
         Vector3{1, 1, 2},
         Vector3{-1, -1, 2},
@@ -136,7 +149,9 @@ int main() {
         Vector3{1, -1, 4},
 
     };
+
     while (running) {
+
         auto now = std::chrono::steady_clock::now();
         std::chrono::duration<float> delta = now - last_time;
         float dt = delta.count();
@@ -145,25 +160,13 @@ int main() {
         }
         // clear screen
         clear(&buffer);
-        offset += 1 * dt;
 
         rotatexz(&vertexes3D, 0.05);
-        vertexes2D = {
-            // front face
-            drawPoint(vertexes3D[0].value(), &buffer),
-            drawPoint(vertexes3D[1].value(), &buffer),
-            drawPoint(vertexes3D[2].value(), &buffer),
-            drawPoint(vertexes3D[3].value(), &buffer),
-
-            // back face
-            drawPoint(vertexes3D[4].value(), &buffer),
-            drawPoint(vertexes3D[5].value(), &buffer),
-            drawPoint(vertexes3D[6].value(), &buffer),
-            drawPoint(vertexes3D[7].value(), &buffer),
-
-        };
+        vertexes2D = plot3D(vertexes3D, &buffer);
         connectPolygon(vertexes2D, &buffer);
+
         bufferDraw(buffer);
+
         last_time = now;
     }
 
