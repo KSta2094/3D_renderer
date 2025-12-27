@@ -8,7 +8,7 @@
 #include <vector>
 #define WIDTH 50
 #define HEIGHT 50
-#define FRAMES 1.0 / 60.0
+#define FRAMES 1.0 / 30.0
 #define PI 3.141592653589793
 
 typedef struct {
