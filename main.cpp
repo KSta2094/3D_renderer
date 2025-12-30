@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <locale>
 #include <optional>
 #include <vector>
 #define WIDTH 50
@@ -15,9 +16,15 @@ typedef struct {
     float x, y;
 } Vector2;
 
-typedef struct {
+struct Vector3 {
     float x, y, z;
-} Vector3;
+
+    Vector3(float x, float y, float z) : x(x), y(y), z(z) {};
+
+    Vector3 operator+(Vector3 vec) {
+        return Vector3{x + vec.x, y + vec.y, z + vec.z};
+    };
+};
 
 std::optional<Vector2> project2D(Vector3 p) {
     if (p.z <= 0) {
@@ -104,7 +111,7 @@ void rotatex(std::vector<std::optional<Vector3>> *vertexes, float angle) {
 
     for (int i{0}; i < (*vertexes).size(); i++) {
 
-        Vector3 tmp{0};
+        Vector3 tmp(0, 0, 0);
 
         tmp.y = ((*vertexes)[i]->y - c_y) * cos(angle) -
                 ((*vertexes)[i]->z - c_z) * sin(angle) + c_y;
@@ -122,7 +129,7 @@ void rotatey(std::vector<std::optional<Vector3>> *vertexes, float angle) {
     float c_z = 3;
 
     for (int i{0}; i < (*vertexes).size(); i++) {
-        Vector3 tmp{0};
+        Vector3 tmp(0, 0, 0);
         // x_rot = c_x + (x - c_x) cos(θ) - (y - c_z) sin(θ);
         // z_rot = c_z - (x - c_x) sin(θ) + (z - c_z) cos(θ);
 
@@ -143,12 +150,54 @@ plot3D(std::vector<std::optional<Vector3>> vertexes3D,
     std::vector<std::optional<Vector2>> screenPoints;
 
     for (std::optional<Vector3> vertex : vertexes3D) {
-        screenPoints.push_back(drawPoint(vertex.value(), buffer));
+        auto tmp = drawPoint(vertex.value(), buffer);
+        if (tmp->x > 0 && tmp->x < WIDTH && tmp->y > 0 && tmp->y < HEIGHT) {
+            screenPoints.push_back(tmp);
+        }
     }
     return screenPoints;
 }
 
+Vector3 get_input() {
+
+    Vector3 out(0, 0, 0);
+
+    // Wait for single character
+    //
+
+    system("stty raw");
+    char input = getchar();
+
+    system("stty cooked");
+    switch (tolower(input, std::locale())) {
+    case 'a':
+        out.x += 0.3;
+        break;
+    case 'd':
+        out.x -= 0.3;
+        break;
+    case 'w':
+        out.z -= 0.3;
+        break;
+    case 's':
+        out.z += 0.3;
+        break;
+    case 'q':
+        system("stty cooked");
+        exit(1);
+    default:
+        return Vector3(0, 0, 0);
+    }
+    return out;
+}
+void move_vertexes(std::vector<std::optional<Vector3>> *vertexes,
+                   Vector3 offset) {
+    for (int i{0}; i < vertexes->size(); i++) {
+        (*vertexes)[i] = (*vertexes)[i].value() + offset;
+    }
+}
 int main() {
+
     auto last_time = std::chrono::steady_clock::now();
     bool running = true;
     std::vector<char> buffer(WIDTH * HEIGHT, ' ');
@@ -170,6 +219,8 @@ int main() {
 
     };
 
+    Vector3 input(0, 0, 0);
+
     while (running) {
 
         auto now = std::chrono::steady_clock::now();
@@ -179,16 +230,16 @@ int main() {
             continue;
         }
         // clear screen
-        clear(&buffer);
-
-        rotatey(&vertexes3D, 0.02);
-        rotatex(&vertexes3D, 0.02);
+        move_vertexes(&vertexes3D, input);
         vertexes2D = plot3D(vertexes3D, &buffer);
         connectPolygon(vertexes2D, &buffer);
 
         bufferDraw(buffer);
 
         last_time = now;
+        input = get_input();
+
+        clear(&buffer);
     }
 
     return 1;
