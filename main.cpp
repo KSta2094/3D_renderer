@@ -6,15 +6,19 @@
 #include <cstdlib>
 #include <locale>
 #include <optional>
+#include <type_traits>
 #include <vector>
 #define WIDTH 50
 #define HEIGHT 50
 #define FRAMES 1.0 / 30.0
 #define PI 3.141592653589793
 
-typedef struct {
-    float x, y;
-} Vector2;
+struct Vector2 {
+    float x, y = 0;
+
+    bool visalbe = true;
+    Vector2(float x, float y, bool visalbe) : x(x), y(y), visalbe(visalbe) {};
+};
 
 struct Vector3 {
     float x, y, z;
@@ -26,18 +30,32 @@ struct Vector3 {
     };
 };
 
-std::optional<Vector2> project2D(Vector3 p) {
-    if (p.z <= 0) {
-        return std::nullopt;
-    };
-    float FOV = (PI / 2.0);
-    float f = 1.0f / std::tan(FOV / 2.0);
-    return Vector2{((p.x / p.z)) * f, ((p.y / p.z)) * f};
-}
 float dist(Vector2 a, Vector2 b) {
     return std::sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
 }
+bool is_point_on_screen(Vector2 a) {
+
+    if (a.x > 0 && a.x < WIDTH && a.y > 0 && a.y < HEIGHT) {
+        return true;
+    }
+    return false;
+}
+
+Vector2 project2D(Vector3 p) {
+    float FOV = (PI / 2.0);
+    float f = 1.0f / std::tan(FOV / 2.0);
+
+    if (p.z <= 0) {
+
+        return Vector2{((p.x / p.z)) * f, ((p.y / p.z)) * f, false};
+    };
+    return Vector2{((p.x / p.z)) * f, ((p.y / p.z)) * f, true};
+}
 void drawLine(Vector2 a, Vector2 b, std::vector<char> *display) {
+
+    if (!(a.visalbe && b.visalbe)) {
+        return;
+    }
     float dx = b.x - a.x;
     float dy = b.y - a.y;
 
@@ -53,10 +71,13 @@ void drawLine(Vector2 a, Vector2 b, std::vector<char> *display) {
         int ix = (int)std::round(x);
         int iy = (int)std::round(y);
 
-        if (ix >= 0 && ix < WIDTH && iy >= 0 && iy < HEIGHT) {
+        if (is_point_on_screen(Vector2{static_cast<float>(ix),
+                                       static_cast<float>(iy), true})) {
             (*display)[iy * WIDTH + ix] = '.';
         }
-        if (i == 0 || i == steps) {
+        if (is_point_on_screen(Vector2{static_cast<float>(ix),
+                                       static_cast<float>(iy), true}) &&
+            (i == 0 || i == steps)) {
             (*display)[iy * WIDTH + ix] = 'X';
         }
         x += xInc;
@@ -64,31 +85,20 @@ void drawLine(Vector2 a, Vector2 b, std::vector<char> *display) {
     }
 }
 
-std::optional<Vector2> drawPoint(Vector3 p, std::vector<char> *buffer) {
+Vector2 drawPoint(Vector3 p, std::vector<char> *buffer) {
     std::optional<Vector2> new_p = project2D(p);
-    if (!new_p) {
-        return std::nullopt;
-    };
-    Vector2 screen;
+    Vector2 screen{0, 0, new_p->visalbe};
     screen.x = static_cast<int>(((new_p->x + 1) / 2.0) * WIDTH - 1);
     screen.y = static_cast<int>((1 - ((new_p->y + 1) / 2.0)) * HEIGHT);
-    if (screen.x > WIDTH && screen.x < 0) {
-        return std::nullopt;
-    };
 
-    if (screen.y > HEIGHT && screen.y < 0) {
-        return std::nullopt;
-    };
-    //(*buffer)[screen.y * WIDTH + screen.x] = 'X';
     return screen;
 }
 
-void connectPolygon(std::vector<std::optional<Vector2>> vertexes,
-                    std::vector<char> *buffer) {
+void connectPolygon(std::vector<Vector2> vertexes, std::vector<char> *buffer) {
     for (std::optional<Vector2> vertex : vertexes) {
-        if (vertex) {
+        if (vertex->visalbe) {
             for (int i{0}; i < vertexes.size() - 1; i++) {
-                drawLine(vertex.value(), vertexes[i].value(), buffer);
+                drawLine(vertex.value(), vertexes[i], buffer);
             }
         }
     }
@@ -149,17 +159,16 @@ void rotatey(std::vector<std::optional<Vector3>> *vertexes, float angle) {
     }
 }
 
-std::vector<std::optional<Vector2>>
-plot3D(std::vector<std::optional<Vector3>> vertexes3D,
-       std::vector<char> *buffer) {
+std::vector<Vector2> plot3D(std::vector<std::optional<Vector3>> vertexes3D,
+                            std::vector<char> *buffer) {
 
-    std::vector<std::optional<Vector2>> screenPoints;
+    std::vector<Vector2> screenPoints;
 
     for (std::optional<Vector3> vertex : vertexes3D) {
         auto tmp = drawPoint(vertex.value(), buffer);
-        if (tmp->x > 0 && tmp->x < WIDTH && tmp->y > 0 && tmp->y < HEIGHT) {
-            screenPoints.push_back(tmp);
-        }
+        // if (is_point_on_screen(tmp)) {
+        screenPoints.push_back(tmp);
+        //}
     }
     return screenPoints;
 }
@@ -167,9 +176,6 @@ plot3D(std::vector<std::optional<Vector3>> vertexes3D,
 Vector3 get_input() {
 
     Vector3 out(0, 0, 0);
-
-    // Wait for single character
-    //
 
     system("stty raw");
     char input = getchar();
@@ -207,7 +213,7 @@ int main() {
     auto last_time = std::chrono::steady_clock::now();
     bool running = true;
     std::vector<char> buffer(WIDTH * HEIGHT, ' ');
-    std::vector<std::optional<Vector2>> vertexes2D;
+    std::vector<Vector2> vertexes2D;
 
     std::vector<std::optional<Vector3>> vertexes3D = {
 
