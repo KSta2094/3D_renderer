@@ -18,6 +18,7 @@ struct Vector2 {
 
     bool visalbe = true;
     Vector2(float x, float y, bool visalbe) : x(x), y(y), visalbe(visalbe) {};
+    Vector2(float x, float y) : x(x), y(y), visalbe(true) {};
 };
 
 struct Vector3 {
@@ -28,6 +29,26 @@ struct Vector3 {
     Vector3 operator+(Vector3 vec) {
         return Vector3{x + vec.x, y + vec.y, z + vec.z};
     };
+
+    Vector3 operator+=(Vector3 vec) {
+        return Vector3{x + vec.x, y + vec.y, z + vec.z};
+    };
+};
+
+struct Triangle3D {
+    Vector3 a, b, c;
+
+    Triangle3D(Vector3 a, Vector3 b, Vector3 c) : a(a), b(b), c(c) {};
+};
+
+struct Triangle2D {
+    Vector2 a, b, c;
+
+    Triangle2D(Vector2 a, Vector2 b, Vector2 c) : a(a), b(b), c(c) {};
+    std::vector<Vector2> get_as_vector() {
+        std::vector<Vector2> out = {a, b, c};
+        return out;
+    }
 };
 
 float dist(Vector2 a, Vector2 b) {
@@ -39,6 +60,11 @@ bool is_point_on_screen(Vector2 a) {
         return true;
     }
     return false;
+}
+
+void draw_pixel(int x, int y, char a, std::vector<char> *buffer) {
+
+    (*buffer)[y * WIDTH + x] = a;
 }
 
 Vector2 project2D(Vector3 p) {
@@ -73,32 +99,37 @@ void drawLine(Vector2 a, Vector2 b, std::vector<char> *display) {
 
         if (is_point_on_screen(Vector2{static_cast<float>(ix),
                                        static_cast<float>(iy), true})) {
-            (*display)[iy * WIDTH + ix] = '.';
+
+            draw_pixel(ix, iy, '.', display);
         }
         if (is_point_on_screen(Vector2{static_cast<float>(ix),
                                        static_cast<float>(iy), true}) &&
             (i == 0 || i == steps)) {
-            (*display)[iy * WIDTH + ix] = 'X';
+            draw_pixel(ix, iy, 'X', display);
         }
         x += xInc;
         y += yInc;
     }
 }
 
-Vector2 drawPoint(Vector3 p, std::vector<char> *buffer) {
-    std::optional<Vector2> new_p = project2D(p);
-    Vector2 screen{0, 0, new_p->visalbe};
-    screen.x = static_cast<int>(((new_p->x + 1) / 2.0) * WIDTH - 1);
-    screen.y = static_cast<int>((1 - ((new_p->y + 1) / 2.0)) * HEIGHT);
+Vector2 drawPoint(Vector3 p) {
+    Vector2 new_p = project2D(p);
+    Vector2 screen{0, 0, new_p.visalbe};
+    screen.x = static_cast<int>(((new_p.x + 1) / 2.0) * WIDTH - 1);
+    screen.y = static_cast<int>((1 - ((new_p.y + 1) / 2.0)) * HEIGHT);
 
     return screen;
 }
 
-void connectPolygon(std::vector<Vector2> vertexes, std::vector<char> *buffer) {
-    for (std::optional<Vector2> vertex : vertexes) {
-        if (vertex->visalbe) {
-            for (int i{0}; i < vertexes.size() - 1; i++) {
-                drawLine(vertex.value(), vertexes[i], buffer);
+void connectPolygon(std::vector<Triangle2D> trigs, std::vector<char> *buffer) {
+
+    for (Triangle2D trig : trigs) {
+        for (Vector2 vertex : trig.get_as_vector()) {
+
+            if (vertex.visalbe) {
+                for (int i{0}; i < trig.get_as_vector().size() - 1; i++) {
+                    drawLine(vertex, trig.get_as_vector()[i], buffer);
+                }
             }
         }
     }
@@ -120,55 +151,14 @@ void bufferDraw(std::vector<char> buffer) {
     }
 }
 
-void rotatex(std::vector<std::optional<Vector3>> *vertexes, float angle) {
-
-    float c_z = 3;
-    float c_y = 0;
-
-    for (int i{0}; i < (*vertexes).size(); i++) {
-
-        Vector3 tmp(0, 0, 0);
-
-        tmp.y = ((*vertexes)[i]->y - c_y) * cos(angle) -
-                ((*vertexes)[i]->z - c_z) * sin(angle) + c_y;
-
-        tmp.z = ((*vertexes)[i]->y - c_y) * sin(angle) +
-                ((*vertexes)[i]->z - c_z) * cos(angle) + c_z;
-        (*vertexes)[i]->y = tmp.y;
-        (*vertexes)[i]->z = tmp.z;
-    }
-}
-
-void rotatey(std::vector<std::optional<Vector3>> *vertexes, float angle) {
-
-    float c_x = 0;
-    float c_z = 3;
-
-    for (int i{0}; i < (*vertexes).size(); i++) {
-        Vector3 tmp(0, 0, 0);
-        // x_rot = c_x + (x - c_x) cos(θ) - (y - c_z) sin(θ);
-        // z_rot = c_z - (x - c_x) sin(θ) + (z - c_z) cos(θ);
-
-        tmp.x = c_x + ((*vertexes)[i]->x - c_x) * cos(angle) +
-                ((*vertexes)[i]->z - c_z) * sin(angle);
-
-        tmp.z = c_z - ((*vertexes)[i]->x - c_x) * sin(angle) +
-                ((*vertexes)[i]->z - c_z) * cos(angle);
-        (*vertexes)[i]->x = tmp.x;
-        (*vertexes)[i]->z = tmp.z;
-    }
-}
-
 std::vector<Vector2> plot3D(std::vector<std::optional<Vector3>> vertexes3D,
                             std::vector<char> *buffer) {
 
     std::vector<Vector2> screenPoints;
 
     for (std::optional<Vector3> vertex : vertexes3D) {
-        auto tmp = drawPoint(vertex.value(), buffer);
-        // if (is_point_on_screen(tmp)) {
+        auto tmp = drawPoint(vertex.value());
         screenPoints.push_back(tmp);
-        //}
     }
     return screenPoints;
 }
@@ -202,32 +192,94 @@ Vector3 get_input() {
     }
     return out;
 }
-void move_vertexes(std::vector<std::optional<Vector3>> *vertexes,
-                   Vector3 offset) {
-    for (int i{0}; i < vertexes->size(); i++) {
-        (*vertexes)[i] = (*vertexes)[i].value() + offset;
+void move_vertexes(std::vector<Triangle3D> *triangles, Vector3 offset) {
+
+    for (int i{0}; i < triangles->size(); i++) {
+        (*triangles)[i].a = (*triangles)[i].a + offset;
+        (*triangles)[i].b = (*triangles)[i].b + offset;
+        (*triangles)[i].c = (*triangles)[i].c + offset;
     }
 }
+
+Triangle2D project_triangle(Triangle3D triangle) {
+    Triangle2D out{
+        drawPoint(triangle.a),
+        drawPoint(triangle.b),
+        drawPoint(triangle.c),
+    };
+    return out;
+}
+
+std::vector<Triangle2D> project_cube(std::vector<Triangle3D> triangles) {
+
+    std::vector<Triangle2D> out;
+    for (Triangle3D triangle : triangles) {
+        out.push_back(project_triangle(triangle));
+    }
+    return out;
+};
+
+float edge_detection(Vector2 a, Vector2 b, Vector2 p) {
+    return (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+}
+bool is_point_in_triangle(Triangle2D t, Vector2 p) {
+    float e1 = edge_detection(t.a, t.b, p);
+    float e2 = edge_detection(t.b, t.c, p);
+    float e3 = edge_detection(t.c, t.a, p);
+
+    bool has_neg = (e1 < 0) || (e2 < 0) || (e3 < 0);
+    bool has_pos = (e1 > 0) || (e2 > 0) || (e3 > 0);
+
+    return !(has_neg && has_pos);
+}
+
+void rastorize_triangle(Triangle2D trig, std::vector<char> *buffer) {
+
+    if (!trig.a.visalbe || !trig.b.visalbe || !trig.c.visalbe)
+        return;
+    for (int y{0}; y < HEIGHT; y++) {
+        for (int x{0}; x < WIDTH; x++) {
+            if (is_point_in_triangle(trig, Vector2{static_cast<float>(x),
+                                                   static_cast<float>(y)})) {
+                if (is_point_on_screen(Vector2{static_cast<float>(x),
+                                               static_cast<float>(y)})) {
+                    draw_pixel(x, y, '.', buffer);
+                }
+            }
+        }
+    }
+};
+
+void rastorize_shape(std::vector<Triangle2D> triangles,
+                     std::vector<char> *buffer) {
+    for (Triangle2D trig : triangles) {
+        rastorize_triangle(trig, buffer);
+    }
+};
+
 int main() {
 
     auto last_time = std::chrono::steady_clock::now();
     bool running = true;
     std::vector<char> buffer(WIDTH * HEIGHT, ' ');
     std::vector<Vector2> vertexes2D;
-
-    std::vector<std::optional<Vector3>> vertexes3D = {
+    std::vector<Triangle2D> projectedTrignales;
+    std::vector<Triangle3D> cube = {
 
         // front face
-        Vector3{-1, 1, 2},
-        Vector3{1, 1, 2},
-        Vector3{-1, -1, 2},
-        Vector3{1, -1, 2},
-
+        Triangle3D{Vector3{-1, 1, 2}, Vector3{1, 1, 2}, Vector3{-1, -1, 2}},
+        Triangle3D{Vector3{1, -1, 2}, Vector3{1, 1, 2}, Vector3{-1, -1, 2}},
         // back face
-        Vector3{-1, 1, 4},
-        Vector3{1, 1, 4},
-        Vector3{-1, -1, 4},
-        Vector3{1, -1, 4},
+        Triangle3D{Vector3{-1, 1, 4}, Vector3{1, 1, 4}, Vector3{-1, -1, 4}},
+        Triangle3D{Vector3{1, -1, 4}, Vector3{1, 1, 4}, Vector3{-1, -1, 4}},
+
+        // left face
+        Triangle3D{Vector3{-1, 1, 2}, Vector3{-1, 1, 4}, Vector3{-1, -1, 2}},
+        Triangle3D{Vector3{-1, -1, 4}, Vector3{-1, 1, 4}, Vector3{-1, -1, 2}},
+
+        // right face
+        Triangle3D{Vector3{1, 1, 2}, Vector3{1, 1, 4}, Vector3{1, -1, 2}},
+        Triangle3D{Vector3{1, -1, 4}, Vector3{1, 1, 4}, Vector3{1, -1, 2}},
 
     };
 
@@ -242,16 +294,18 @@ int main() {
             continue;
         }
         // clear screen
-        move_vertexes(&vertexes3D, input);
-        vertexes2D = plot3D(vertexes3D, &buffer);
-        connectPolygon(vertexes2D, &buffer);
+        //
+        clear(&buffer);
+        move_vertexes(&cube, input);
+        // vertexes2D = plot3D(vertexes3D, &buffer);
+        //
+        projectedTrignales = project_cube(cube);
 
+        rastorize_shape(projectedTrignales, &buffer);
         bufferDraw(buffer);
 
         last_time = now;
         input = get_input();
-
-        clear(&buffer);
     }
 
     return 1;
